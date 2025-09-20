@@ -152,7 +152,8 @@ class SimpleRAG:
     """Simple RAG system using the aimakerspace library"""
     
     def __init__(self):
-        self.text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        # Use smaller chunks for better retrieval precision
+        self.text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     
     async def process_document(self, text: str, document_id: str) -> int:
         """Process a document and store it in the vector database"""
@@ -194,21 +195,22 @@ class SimpleRAG:
         genai.configure(api_key=gemini_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        prompt = f"""You are a document analysis assistant. Your ONLY job is to answer questions about the content of the provided document context. 
+        prompt = f"""You are a document analysis assistant. Answer questions about the document content provided below.
 
-IMPORTANT INSTRUCTIONS:
-- Answer questions ONLY based on the document content provided below
-- Do NOT generate test cases, requirements, or any structured outputs
-- Do NOT create lists, tables, or formatted content unless specifically asked about what's IN the document
-- If the question asks you to generate, create, or produce anything new, respond: "I can only answer questions about the existing document content. For generating new content like test cases, please use the appropriate generation tool."
-- If the answer cannot be found in the context, say "I cannot find that information in the provided document."
+INSTRUCTIONS:
+- Use the document context below to answer the user's question
+- Be helpful and informative when the information IS available in the context
+- Extract and summarize relevant information from the provided context
+- Do NOT generate test cases, requirements, or structured outputs unless specifically asked about what's IN the document
+- If the question asks to generate/create new content, say: "I can only answer questions about the existing document content. For generating new content like test cases, please use the appropriate generation tool."
+- Only say you cannot find information if it's truly not present in any of the provided context chunks
 
-Document Context:
+DOCUMENT CONTEXT:
 {context}
 
-User Question: {question}
+USER QUESTION: {question}
 
-Response (answer the question about the document only):"""
+RESPONSE (based on the document context above):"""
         
         response = model.generate_content(prompt)
         return response.text
@@ -792,12 +794,19 @@ async def chat_with_document(
             # Use the most recent document
             request.document_id = list(rag_documents.keys())[-1]
         
-        # Search for relevant chunks
+        # Search for relevant chunks with better parameters
         relevant_chunks = rag_system.search_document(
             request.question, 
             request.document_id, 
-            k=3
+            k=5  # Get more chunks for better context
         )
+        
+        # Debug: log the search results in development mode
+        if DEVELOPMENT_MODE:
+            print(f"[RAG DEBUG] Question: {request.question}")
+            print(f"[RAG DEBUG] Found {len(relevant_chunks)} chunks")
+            if relevant_chunks:
+                print(f"[RAG DEBUG] First chunk preview: {relevant_chunks[0][:100]}...")
         
         if not relevant_chunks:
             return RAGChatResponse(
