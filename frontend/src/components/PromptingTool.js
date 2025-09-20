@@ -23,7 +23,7 @@ const PromptingTool = ({ testCases = [], apiKey, onTestCasesUpdate }) => {
 
     try {
       const API_BASE = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:8001' 
+        ? 'http://localhost:8000' 
         : window.location.origin;
         
       const response = await fetch(`${API_BASE}/api/chat`, {
@@ -71,7 +71,7 @@ const PromptingTool = ({ testCases = [], apiKey, onTestCasesUpdate }) => {
 
     try {
       const API_BASE = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:8001' 
+        ? 'http://localhost:8000' 
         : window.location.origin;
         
       const response = await fetch(`${API_BASE}/api/refine-test-cases`, {

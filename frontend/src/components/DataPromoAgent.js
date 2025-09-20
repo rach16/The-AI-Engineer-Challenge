@@ -14,7 +14,7 @@ const DataPromoAgent = () => {
 
   // API base URL - adjust for your environment
   const API_BASE = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:8001' 
+    ? 'http://localhost:8000' 
     : window.location.origin;
 
   const scrollToBottom = () => {

@@ -27,7 +27,7 @@ const PRDGenerator = () => {
   
   // API base URL
   const API_BASE = process.env.NODE_ENV === 'development' 
-    ? 'http://localhost:8001' 
+    ? 'http://localhost:8000' 
     : window.location.origin;
 
   // Check usage info on component mount
