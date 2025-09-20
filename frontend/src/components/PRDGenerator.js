@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import FileUpload from './FileUpload';
 import TestCaseTable from './TestCaseTable';
 import UsageInfo from './UsageInfo';
 import PromptingTool from './PromptingTool';
-import { FileText } from 'lucide-react';
+import { FileText, MessageSquare, Zap, Bot, User, Send, Loader, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
 import './PRDGenerator.css';
 
 const PRDGenerator = () => {
@@ -14,11 +14,30 @@ const PRDGenerator = () => {
   const [hasResults, setHasResults] = useState(false);
   const [usageInfo, setUsageInfo] = useState(null);
   const [serviceAvailable, setServiceAvailable] = useState(false);
+  
+  // RAG-related state
+  const [uploadedDocument, setUploadedDocument] = useState(null);
+  const [showOptions, setShowOptions] = useState(false);
+  const [showRAGChat, setShowRAGChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [currentMessage, setCurrentMessage] = useState('');
+  const [isRAGLoading, setIsRAGLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+  
+  // API base URL
+  const API_BASE = process.env.NODE_ENV === 'development' 
+    ? 'http://localhost:8001' 
+    : window.location.origin;
 
   // Check usage info on component mount
   useEffect(() => {
     fetchUsageInfo();
   }, []);
+
+  // Auto-scroll to bottom of chat
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   const fetchUsageInfo = async () => {
     try {
@@ -31,7 +50,135 @@ const PRDGenerator = () => {
     }
   };
 
+  // RAG helper functions
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const uploadToRAG = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await axios.post(`${API_BASE}/api/upload-document`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.success) {
+        setUploadedDocument({
+          name: file.name,
+          id: response.data.document_id,
+          chunks: response.data.chunks_count,
+          uploadTime: new Date().toLocaleTimeString()
+        });
+        setChatMessages([{
+          type: 'system',
+          content: `🎉 PRD "${file.name}" uploaded successfully! Split into ${response.data.chunks_count} searchable chunks. You can now chat with your PRD to understand requirements better, or generate test cases directly.`
+        }]);
+        setShowOptions(true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error uploading to RAG:', error);
+      toast.error('Failed to upload document for RAG analysis');
+      return false;
+    }
+  };
+
+  const sendRAGMessage = async () => {
+    if (!currentMessage.trim() || !uploadedDocument) return;
+
+    const userMessage = { type: 'user', content: currentMessage, timestamp: new Date() };
+    setChatMessages(prev => [...prev, userMessage]);
+    setCurrentMessage('');
+    setIsRAGLoading(true);
+
+    try {
+      const response = await axios.post(`${API_BASE}/api/chat-with-document`, {
+        question: currentMessage,
+        document_id: uploadedDocument.id,
+      });
+
+      if (response.data.success) {
+        const botMessage = {
+          type: 'bot',
+          content: response.data.answer,
+          sources: response.data.sources || [],
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, botMessage]);
+      } else {
+        const errorMessage = {
+          type: 'error',
+          content: response.data.message || 'Sorry, I encountered an error processing your question.',
+          timestamp: new Date()
+        };
+        setChatMessages(prev => [...prev, errorMessage]);
+      }
+    } catch (error) {
+      const errorMessage = {
+        type: 'error',
+        content: `Error: ${error.message}`,
+        timestamp: new Date()
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsRAGLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendRAGMessage();
+    }
+  };
+
+  const getSampleQuestions = () => [
+    "What are the main features described in this PRD?",
+    "What are the user requirements and acceptance criteria?",
+    "Are there any edge cases or error scenarios mentioned?",
+    "What integrations or dependencies are described?",
+    "What are the performance or security requirements?"
+  ];
+
   const handleFileUpload = async (file) => {
+    setLoading(true);
+    
+    try {
+      // First upload to RAG system for analysis capabilities
+      const ragSuccess = await uploadToRAG(file);
+      
+      if (ragSuccess) {
+        toast.success('✅ PRD uploaded successfully! Choose how to proceed.');
+        await fetchUsageInfo();
+      } else {
+        toast.error('Failed to upload PRD. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      
+      // Handle different error scenarios with helpful messages
+      if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+        toast.error('❌ Unable to connect to server. Please try again.');
+      } else if (error.response?.status === 503) {
+        toast.error('⚠️ Service temporarily unavailable. Please try again later.');
+      } else if (error.response?.status === 429) {
+        toast.error('📊 Daily limit reached! Please try again tomorrow.');
+      } else if (error.response?.data?.detail) {
+        toast.error(error.response.data.detail);
+      } else {
+        toast.error('Failed to process the file. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateTestCasesFromPRD = async (file) => {
     setLoading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -58,9 +205,8 @@ const PRDGenerator = () => {
         toast.error('Failed to generate test cases');
       }
     } catch (error) {
-      console.error('Error uploading file:', error);
+      console.error('Error generating test cases:', error);
       
-      // Handle different error scenarios with helpful messages
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
         toast.error('❌ Unable to connect to server. Please try again.');
       } else if (error.response?.status === 503) {
@@ -103,6 +249,11 @@ const PRDGenerator = () => {
   const handleReset = () => {
     setTestCases([]);
     setHasResults(false);
+    setUploadedDocument(null);
+    setShowOptions(false);
+    setShowRAGChat(false);
+    setChatMessages([]);
+    setCurrentMessage('');
     fetchUsageInfo(); // Refresh usage info
     toast.success('Ready for new upload');
   };
@@ -126,7 +277,7 @@ const PRDGenerator = () => {
       </div>
 
       <div className="tab-content">
-        {!hasResults ? (
+        {!uploadedDocument && !hasResults ? (
           <div className="upload-section">
             <UsageInfo 
               usageInfo={usageInfo} 
@@ -138,6 +289,207 @@ const PRDGenerator = () => {
               usageInfo={usageInfo}
               serviceAvailable={serviceAvailable}
             />
+          </div>
+        ) : showOptions && !showRAGChat && !hasResults ? (
+          <div className="options-section">
+            <div className="document-uploaded">
+              <div className="document-info">
+                <FileText size={24} />
+                <div className="document-details">
+                  <h3>{uploadedDocument.name}</h3>
+                  <p>{uploadedDocument.chunks} chunks • Uploaded at {uploadedDocument.uploadTime}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="workflow-options">
+              <h3>How would you like to proceed?</h3>
+              <p>You can chat with your PRD first to understand requirements better, or generate test cases directly.</p>
+              
+              <div className="option-cards">
+                <button 
+                  className="option-card chat-option"
+                  onClick={() => setShowRAGChat(true)}
+                >
+                  <div className="option-icon">
+                    <MessageSquare size={32} />
+                  </div>
+                  <div className="option-content">
+                    <h4>Chat with PRD</h4>
+                    <p>Ask questions about requirements, features, and edge cases before generating test cases</p>
+                    <div className="option-benefits">
+                      <span>✨ Better understanding</span>
+                      <span>🎯 Targeted test cases</span>
+                      <span>🔍 Identify edge cases</span>
+                    </div>
+                  </div>
+                  <ArrowRight size={20} className="option-arrow" />
+                </button>
+
+                <button 
+                  className="option-card generate-option"
+                  onClick={() => {
+                    const fileInput = document.querySelector('input[type="file"]');
+                    const file = fileInput?.files[0];
+                    if (file) generateTestCasesFromPRD(file);
+                  }}
+                  disabled={loading}
+                >
+                  <div className="option-icon">
+                    <Zap size={32} />
+                  </div>
+                  <div className="option-content">
+                    <h4>Generate Test Cases</h4>
+                    <p>Skip to directly generating comprehensive test cases from your PRD</p>
+                    <div className="option-benefits">
+                      <span>⚡ Quick results</span>
+                      <span>📋 Comprehensive coverage</span>
+                      <span>📊 Structured format</span>
+                    </div>
+                  </div>
+                  <ArrowRight size={20} className="option-arrow" />
+                </button>
+              </div>
+              
+              <button 
+                onClick={handleReset}
+                className="reset-button"
+              >
+                Upload Different PRD
+              </button>
+            </div>
+          </div>
+        ) : showRAGChat && !hasResults ? (
+          <div className="rag-chat-section">
+            <div className="document-header">
+              <div className="document-info">
+                <FileText size={20} />
+                <div className="document-details">
+                  <h3>{uploadedDocument.name}</h3>
+                  <p>{uploadedDocument.chunks} chunks indexed</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    const fileInput = document.querySelector('input[type="file"]');
+                    const file = fileInput?.files[0];
+                    if (file) generateTestCasesFromPRD(file);
+                  }}
+                  className="generate-tests-btn"
+                  disabled={loading}
+                >
+                  {loading ? <Loader className="spinner" size={16} /> : <Zap size={16} />}
+                  Generate Test Cases
+                </button>
+              </div>
+            </div>
+
+            <div className="chat-interface">
+              <h3>
+                <MessageSquare size={20} />
+                Chat with Your PRD
+              </h3>
+              <p>Ask questions to understand requirements better before generating test cases</p>
+              
+              {/* Sample Questions */}
+              {chatMessages.length <= 1 && (
+                <div className="sample-questions">
+                  <h4>Suggested questions:</h4>
+                  <div className="question-chips">
+                    {getSampleQuestions().map((question, index) => (
+                      <button
+                        key={index}
+                        className="question-chip"
+                        onClick={() => setCurrentMessage(question)}
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Chat Messages */}
+              <div className="chat-container">
+                <div className="chat-messages">
+                  {chatMessages.map((message, index) => (
+                    <div key={index} className={`message ${message.type}`}>
+                      <div className="message-header">
+                        {message.type === 'user' && <User size={16} />}
+                        {message.type === 'bot' && <Bot size={16} />}
+                        {message.type === 'system' && <CheckCircle size={16} />}
+                        {message.type === 'error' && <AlertTriangle size={16} />}
+                        <span className="message-type">
+                          {message.type === 'user' ? 'You' : 
+                           message.type === 'bot' ? 'PRD Assistant' : 
+                           message.type === 'system' ? 'System' : 'Error'}
+                        </span>
+                        {message.timestamp && (
+                          <span className="message-time">
+                            {message.timestamp.toLocaleTimeString()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="message-content">
+                        {message.content}
+                        {message.sources && message.sources.length > 0 && (
+                          <div className="message-sources">
+                            <h5>📚 Sources from PRD:</h5>
+                            {message.sources.map((source, idx) => (
+                              <div key={idx} className="source-chunk">
+                                {source.substring(0, 200)}...
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {isRAGLoading && (
+                    <div className="message bot loading">
+                      <div className="message-header">
+                        <Bot size={16} />
+                        <span className="message-type">PRD Assistant</span>
+                      </div>
+                      <div className="message-content">
+                        <Loader className="spinner" size={16} />
+                        <span>Analyzing PRD and generating response...</span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+                
+                {/* Chat Input */}
+                <div className="chat-input-container">
+                  <div className="chat-input-wrapper">
+                    <textarea
+                      value={currentMessage}
+                      onChange={(e) => setCurrentMessage(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="Ask about requirements, features, edge cases... (Press Enter to send)"
+                      className="chat-input"
+                      rows="1"
+                    />
+                    <button
+                      onClick={sendRAGMessage}
+                      disabled={!currentMessage.trim() || isRAGLoading}
+                      className="send-btn"
+                    >
+                      <Send size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="chat-actions">
+              <button onClick={() => setShowRAGChat(false)} className="back-button">
+                ← Back to Options
+              </button>
+              <button onClick={handleReset} className="reset-button">
+                Start Over
+              </button>
+            </div>
           </div>
         ) : (
           <div className="results-section">
