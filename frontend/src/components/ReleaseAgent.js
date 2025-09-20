@@ -5,13 +5,13 @@ import './ReleaseAgent.css';
 const ReleaseAgent = () => {
   const [selectedRepos, setSelectedRepos] = useState([]);
   
-  // Mock repository data based on your Confluence document
+  // Mock repository data for demonstration
   const repositories = [
-    'piq-customer-ui', 'platform-ui', 'niffler-api', 'aeon-api', 've-api',
-    'export-tracking-api', 'covered-wagon', 'linkedin-api', 'bacchus-api',
-    'hermes-api', 'company-search-api', 'taxonomy-api', 'talaria-api',
-    'company-match-api', 'hg-force-api', 'scoring-api', 'overseer',
-    'overlord-api', 'overlord-ui'
+    'sample-frontend-app', 'sample-api-service', 'user-management-api', 'notification-service', 'analytics-dashboard',
+    'file-processing-api', 'content-manager', 'integration-hub', 'data-processor-api',
+    'authentication-service', 'search-api', 'metadata-service', 'messaging-api',
+    'report-generator', 'workflow-engine', 'monitoring-service', 'config-manager',
+    'backup-service', 'admin-panel'
   ];
 
   const features = [
