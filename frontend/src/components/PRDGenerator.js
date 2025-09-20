@@ -41,7 +41,7 @@ const PRDGenerator = () => {
 
   const fetchUsageInfo = async () => {
     try {
-      const response = await axios.get('/api/usage-info');
+      const response = await axios.get(`${API_BASE}/api/usage-info`);
       setUsageInfo(response.data);
       setServiceAvailable(response.data.service_available);
     } catch (error) {
@@ -184,7 +184,7 @@ const PRDGenerator = () => {
     formData.append('file', file);
 
     try {
-      const response = await axios.post('/api/upload-prd', formData, {
+      const response = await axios.post(`${API_BASE}/api/upload-prd`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -225,7 +225,7 @@ const PRDGenerator = () => {
 
   const handleDownloadCSV = async () => {
     try {
-      const response = await axios.post('/api/download-csv', testCases, {
+      const response = await axios.post(`${API_BASE}/api/download-csv`, testCases, {
         responseType: 'blob',
       });
 

@@ -22,7 +22,11 @@ const PromptingTool = ({ testCases = [], apiKey, onTestCasesUpdate }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/chat', {
+      const API_BASE = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:8001' 
+        : window.location.origin;
+        
+      const response = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -66,7 +70,11 @@ const PromptingTool = ({ testCases = [], apiKey, onTestCasesUpdate }) => {
     const refinementPrompt = "Please analyze these test cases and suggest improvements for better coverage, clarity, and effectiveness.";
 
     try {
-      const response = await fetch('/api/refine-test-cases', {
+      const API_BASE = process.env.NODE_ENV === 'development' 
+        ? 'http://localhost:8001' 
+        : window.location.origin;
+        
+      const response = await fetch(`${API_BASE}/api/refine-test-cases`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
