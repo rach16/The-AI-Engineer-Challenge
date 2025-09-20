@@ -11,8 +11,7 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  // Always use dark theme
-  const [theme, setTheme] = useState('dark');
+  // Always use dark theme - no state needed
 
   useEffect(() => {
     // Always apply dark theme to document root
