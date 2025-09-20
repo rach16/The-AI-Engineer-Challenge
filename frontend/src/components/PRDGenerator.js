@@ -17,6 +17,7 @@ const PRDGenerator = () => {
   
   // RAG-related state
   const [uploadedDocument, setUploadedDocument] = useState(null);
+  const [uploadedFile, setUploadedFile] = useState(null); // Store file reference
   const [showOptions, setShowOptions] = useState(false);
   const [showRAGChat, setShowRAGChat] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
@@ -138,17 +139,22 @@ const PRDGenerator = () => {
   };
 
   const getSampleQuestions = () => [
-    "What are the main features described in this PRD?",
-    "What are the user requirements and acceptance criteria?",
-    "Are there any edge cases or error scenarios mentioned?",
-    "What integrations or dependencies are described?",
-    "What are the performance or security requirements?"
+    "What are the main features described in this document?",
+    "What user requirements are mentioned in this PRD?",
+    "Are there any edge cases or error scenarios described?",
+    "What integrations or dependencies are mentioned?",
+    "What performance requirements does this document specify?",
+    "Who is the target audience mentioned in this PRD?",
+    "What business objectives are outlined in this document?"
   ];
 
   const handleFileUpload = async (file) => {
     setLoading(true);
     
     try {
+      // Store the file reference for later use
+      setUploadedFile(file);
+      
       // First upload to RAG system for analysis capabilities
       const ragSuccess = await uploadToRAG(file);
       
@@ -250,6 +256,7 @@ const PRDGenerator = () => {
     setTestCases([]);
     setHasResults(false);
     setUploadedDocument(null);
+    setUploadedFile(null); // Clear file reference
     setShowOptions(false);
     setShowRAGChat(false);
     setChatMessages([]);
@@ -329,9 +336,7 @@ const PRDGenerator = () => {
                 <button 
                   className="option-card generate-option"
                   onClick={() => {
-                    const fileInput = document.querySelector('input[type="file"]');
-                    const file = fileInput?.files[0];
-                    if (file) generateTestCasesFromPRD(file);
+                    if (uploadedFile) generateTestCasesFromPRD(uploadedFile);
                   }}
                   disabled={loading}
                 >
@@ -370,9 +375,7 @@ const PRDGenerator = () => {
                 </div>
                 <button 
                   onClick={() => {
-                    const fileInput = document.querySelector('input[type="file"]');
-                    const file = fileInput?.files[0];
-                    if (file) generateTestCasesFromPRD(file);
+                    if (uploadedFile) generateTestCasesFromPRD(uploadedFile);
                   }}
                   className="generate-tests-btn"
                   disabled={loading}

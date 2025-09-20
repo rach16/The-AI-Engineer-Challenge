@@ -194,14 +194,21 @@ class SimpleRAG:
         genai.configure(api_key=gemini_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
-        prompt = f"""Based on the following context, please answer the question. If the answer cannot be found in the context, say "I cannot find the answer in the provided document."
+        prompt = f"""You are a document analysis assistant. Your ONLY job is to answer questions about the content of the provided document context. 
 
-Context:
+IMPORTANT INSTRUCTIONS:
+- Answer questions ONLY based on the document content provided below
+- Do NOT generate test cases, requirements, or any structured outputs
+- Do NOT create lists, tables, or formatted content unless specifically asked about what's IN the document
+- If the question asks you to generate, create, or produce anything new, respond: "I can only answer questions about the existing document content. For generating new content like test cases, please use the appropriate generation tool."
+- If the answer cannot be found in the context, say "I cannot find that information in the provided document."
+
+Document Context:
 {context}
 
-Question: {question}
+User Question: {question}
 
-Answer:"""
+Response (answer the question about the document only):"""
         
         response = model.generate_content(prompt)
         return response.text
