@@ -9,11 +9,17 @@ from PIL import Image
 import PyPDF2
 import google.generativeai as genai
 from dotenv import load_dotenv
+import asyncio
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+# Import RAG components
+from aimakerspace.text_utils import CharacterTextSplitter
+from aimakerspace.vectordatabase import VectorDatabase
+from aimakerspace.openai_utils.embedding import EmbeddingModel
 
 # Load environment variables from .env file
 load_dotenv()
@@ -33,8 +39,12 @@ app.add_middleware(
 # Built-in API key for free tier (set via environment variable)
 BUILT_IN_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 
+# Development mode configuration
+DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "true").lower() == "true"  # Default to true for local testing
+
 # Rate limiting configuration
 FREE_TIER_DAILY_LIMIT = 5  # 5 free uses per day for production
+UNLIMITED_DEV_LIMIT = 999999  # Unlimited for development
 usage_tracker = {}  # In production, use Redis or database
 
 # Data models
@@ -53,6 +63,26 @@ class ProcessResponse(BaseModel):
     test_cases: List[TestCase]
     usage_info: Dict[str, Any]
 
+# RAG Data Models
+class RAGUploadResponse(BaseModel):
+    success: bool
+    message: str
+    document_id: str
+    chunks_count: int
+    usage_info: Dict[str, Any]
+
+class RAGChatRequest(BaseModel):
+    question: str
+    document_id: Optional[str] = None
+    api_key: Optional[str] = None
+
+class RAGChatResponse(BaseModel):
+    success: bool
+    message: str
+    answer: str
+    sources: List[str]
+    usage_info: Dict[str, Any]
+
 def get_client_identifier(request: Request) -> str:
     """Get a unique identifier for rate limiting (IP + User Agent)"""
     client_ip = request.client.host
@@ -63,6 +93,24 @@ def check_free_tier_usage(client_id: str) -> Dict[str, Any]:
     """Check and update free tier usage"""
     today = datetime.now().date().isoformat()
     
+    # In development mode, provide unlimited usage
+    if DEVELOPMENT_MODE:
+        if client_id not in usage_tracker:
+            usage_tracker[client_id] = {}
+        if today not in usage_tracker[client_id]:
+            usage_tracker[client_id][today] = 0
+        
+        current_usage = usage_tracker[client_id][today]
+        return {
+            "tier": "development",
+            "daily_limit": "unlimited",
+            "used_today": current_usage,
+            "remaining_today": "unlimited",
+            "can_use": True,
+            "development_mode": True
+        }
+    
+    # Production mode with rate limiting
     if client_id not in usage_tracker:
         usage_tracker[client_id] = {}
     
@@ -77,7 +125,8 @@ def check_free_tier_usage(client_id: str) -> Dict[str, Any]:
         "daily_limit": FREE_TIER_DAILY_LIMIT,
         "used_today": current_usage,
         "remaining_today": remaining,
-        "can_use": remaining > 0
+        "can_use": remaining > 0,
+        "development_mode": False
     }
 
 def increment_free_tier_usage(client_id: str):
@@ -91,6 +140,74 @@ def increment_free_tier_usage(client_id: str):
         usage_tracker[client_id][today] = 0
     
     usage_tracker[client_id][today] += 1
+    
+    # Log usage in development mode for statistics
+    if DEVELOPMENT_MODE:
+        print(f"[DEV MODE] API call #{usage_tracker[client_id][today]} for client {client_id[:10]}... on {today}")
+
+# Simple in-memory storage for RAG documents
+rag_documents: Dict[str, VectorDatabase] = {}
+
+class SimpleRAG:
+    """Simple RAG system using the aimakerspace library"""
+    
+    def __init__(self):
+        self.text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    
+    async def process_document(self, text: str, document_id: str) -> int:
+        """Process a document and store it in the vector database"""
+        try:
+            # Split text into chunks
+            chunks = self.text_splitter.split(text)
+            
+            # Create vector database with OpenAI embeddings
+            vector_db = VectorDatabase()
+            
+            # Build embeddings and populate vector database
+            vector_db = await vector_db.abuild_from_list(chunks)
+            
+            # Store in memory (in production, use persistent storage)
+            rag_documents[document_id] = vector_db
+            
+            return len(chunks)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error processing document: {str(e)}")
+    
+    def search_document(self, question: str, document_id: str, k: int = 3) -> List[str]:
+        """Search for relevant chunks in a document"""
+        if document_id not in rag_documents:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        vector_db = rag_documents[document_id]
+        results = vector_db.search_by_text(question, k=k, return_as_text=True)
+        return results
+    
+    async def generate_answer(self, question: str, context_chunks: List[str], api_key: str = "") -> str:
+        """Generate an answer using the context chunks"""
+        context = "\n\n".join(context_chunks)
+        
+        # Use provided API key or built-in key
+        gemini_key = api_key if api_key else BUILT_IN_GEMINI_KEY
+        if not gemini_key:
+            return "API key required for RAG functionality."
+        
+        genai.configure(api_key=gemini_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        prompt = f"""Based on the following context, please answer the question. If the answer cannot be found in the context, say "I cannot find the answer in the provided document."
+
+Context:
+{context}
+
+Question: {question}
+
+Answer:"""
+        
+        response = model.generate_content(prompt)
+        return response.text
+
+# Initialize RAG system
+rag_system = SimpleRAG()
 
 def extract_text_from_pdf(file_content: bytes) -> str:
     """Extract text content from PDF file"""
@@ -226,9 +343,10 @@ async def upload_prd(
     usage_info = check_free_tier_usage(client_id)
     
     if not usage_info["can_use"]:
+        limit_text = "unlimited" if DEVELOPMENT_MODE else str(FREE_TIER_DAILY_LIMIT)
         raise HTTPException(
             status_code=429,
-            detail=f"Daily limit ({FREE_TIER_DAILY_LIMIT} uses) reached. Please try again tomorrow."
+            detail=f"Daily limit ({limit_text} uses) reached. Please try again tomorrow."
         )
 
     try:
@@ -256,7 +374,10 @@ async def upload_prd(
         
         # Get updated usage info
         updated_usage_info = check_free_tier_usage(client_id)
-        updated_usage_info["message"] = f"✅ Success! {updated_usage_info['remaining_today']} uses remaining today"
+        if DEVELOPMENT_MODE:
+            updated_usage_info["message"] = f"✅ Success! Development mode - unlimited usage (call #{updated_usage_info['used_today']})"
+        else:
+            updated_usage_info["message"] = f"✅ Success! {updated_usage_info['remaining_today']} uses remaining today"
         
         return ProcessResponse(
             success=True,
@@ -279,6 +400,7 @@ async def get_usage_info(request: Request):
     return {
         "service_available": bool(BUILT_IN_GEMINI_KEY),
         "free_tier_available": bool(BUILT_IN_GEMINI_KEY),
+        "development_mode": DEVELOPMENT_MODE,
         **usage_info
     }
 
@@ -325,7 +447,9 @@ async def health_check():
         "status": "ok", 
         "service": "PRD to Test Case Generator",
         "free_tier_available": bool(BUILT_IN_GEMINI_KEY),
-        "daily_free_limit": FREE_TIER_DAILY_LIMIT
+        "daily_free_limit": "unlimited" if DEVELOPMENT_MODE else FREE_TIER_DAILY_LIMIT,
+        "development_mode": DEVELOPMENT_MODE,
+        "tier": "development" if DEVELOPMENT_MODE else "production"
     }
 
 # Additional data models for prompting tool
@@ -568,6 +692,161 @@ Provide helpful suggestions for making these test cases clearer, more comprehens
             response="",
             usage_info=usage_info if 'usage_info' in locals() else {}
         )
+
+# RAG Endpoints
+
+@app.post("/api/upload-document", response_model=RAGUploadResponse)
+async def upload_document_for_rag(
+    request: Request,
+    file: UploadFile = File(...)
+):
+    """Upload and process a document for RAG"""
+    
+    # Validate file type
+    if file.content_type != 'application/pdf':
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are supported for RAG functionality."
+        )
+    
+    # Check rate limiting
+    client_id = get_client_identifier(request)
+    usage_info = check_free_tier_usage(client_id)
+    
+    if not usage_info["can_use"]:
+        limit_text = "unlimited" if DEVELOPMENT_MODE else str(FREE_TIER_DAILY_LIMIT)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Daily limit ({limit_text} uses) reached. Please try again tomorrow."
+        )
+    
+    try:
+        # Read and extract text from PDF
+        file_content = await file.read()
+        text_content = extract_text_from_pdf(file_content)
+        
+        if not text_content.strip():
+            raise HTTPException(status_code=400, detail="No text content found in the PDF")
+        
+        # Generate unique document ID
+        document_id = f"doc_{int(datetime.now().timestamp())}_{hash(text_content[:100]) % 10000}"
+        
+        # Process document with RAG
+        chunks_count = await rag_system.process_document(text_content, document_id)
+        
+        # Update usage tracking
+        increment_free_tier_usage(client_id)
+        updated_usage_info = check_free_tier_usage(client_id)
+        
+        if DEVELOPMENT_MODE:
+            updated_usage_info["message"] = f"✅ Document processed! Development mode - unlimited usage"
+        else:
+            updated_usage_info["message"] = f"✅ Document processed! {updated_usage_info['remaining_today']} uses remaining today"
+        
+        return RAGUploadResponse(
+            success=True,
+            message=f"Document processed successfully into {chunks_count} chunks",
+            document_id=document_id,
+            chunks_count=chunks_count,
+            usage_info=updated_usage_info
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing document: {str(e)}")
+
+@app.post("/api/chat-with-document", response_model=RAGChatResponse)
+async def chat_with_document(
+    request: RAGChatRequest,
+    http_request: Request
+):
+    """Chat with an uploaded document using RAG"""
+    
+    # Check rate limiting
+    client_id = get_client_identifier(http_request)
+    usage_info = check_free_tier_usage(client_id)
+    
+    # Use provided API key or check free tier
+    if not request.api_key and not usage_info["can_use"]:
+        return RAGChatResponse(
+            success=False,
+            message="Daily free tier limit reached. Please provide your own API key.",
+            answer="",
+            sources=[],
+            usage_info=usage_info
+        )
+    
+    try:
+        # If no document_id specified, check if there's any document available
+        if not request.document_id:
+            if not rag_documents:
+                raise HTTPException(status_code=400, detail="No document uploaded. Please upload a document first.")
+            # Use the most recent document
+            request.document_id = list(rag_documents.keys())[-1]
+        
+        # Search for relevant chunks
+        relevant_chunks = rag_system.search_document(
+            request.question, 
+            request.document_id, 
+            k=3
+        )
+        
+        if not relevant_chunks:
+            return RAGChatResponse(
+                success=True,
+                message="No relevant information found",
+                answer="I cannot find relevant information in the document to answer your question.",
+                sources=[],
+                usage_info=usage_info
+            )
+        
+        # Generate answer using RAG
+        answer = await rag_system.generate_answer(
+            request.question,
+            relevant_chunks,
+            request.api_key or BUILT_IN_GEMINI_KEY
+        )
+        
+        # Update usage if using free tier
+        if not request.api_key:
+            increment_free_tier_usage(client_id)
+            usage_info = check_free_tier_usage(client_id)
+        
+        return RAGChatResponse(
+            success=True,
+            message="Answer generated successfully",
+            answer=answer,
+            sources=relevant_chunks[:2],  # Return top 2 source chunks
+            usage_info=usage_info
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        return RAGChatResponse(
+            success=False,
+            message=f"Error: {str(e)}",
+            answer="",
+            sources=[],
+            usage_info=usage_info if 'usage_info' in locals() else {}
+        )
+
+@app.get("/api/list-documents")
+async def list_documents():
+    """List all uploaded documents"""
+    documents = []
+    for doc_id in rag_documents.keys():
+        documents.append({
+            "document_id": doc_id,
+            "chunks_count": len(rag_documents[doc_id].vectors)
+        })
+    
+    return {
+        "success": True,
+        "documents": documents,
+        "total_documents": len(documents)
+    }
 
 # Entry point for running the application
 if __name__ == "__main__":
