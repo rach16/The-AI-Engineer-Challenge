@@ -3,7 +3,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
 
-from aimakerspace.openai_utils.embedding import EmbeddingModel
+from aimakerspace.gemini_utils.embedding import GeminiEmbeddingModel
 
 
 def cosine_similarity(vector_a: np.ndarray, vector_b: np.ndarray) -> float:
@@ -21,9 +21,9 @@ def cosine_similarity(vector_a: np.ndarray, vector_b: np.ndarray) -> float:
 class VectorDatabase:
     """Minimal in-memory vector store backed by numpy arrays."""
 
-    def __init__(self, embedding_model: Optional[EmbeddingModel] = None):
+    def __init__(self, embedding_model: Optional[GeminiEmbeddingModel] = None):
         self.vectors: Dict[str, np.ndarray] = {}
-        self.embedding_model = embedding_model or EmbeddingModel()
+        self.embedding_model = embedding_model or GeminiEmbeddingModel()
 
     def insert(self, key: str, vector: Iterable[float]) -> None:
         """Store ``vector`` so that it can be retrieved with ``key`` later on."""

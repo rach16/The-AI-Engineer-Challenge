@@ -19,7 +19,7 @@ from pydantic import BaseModel
 # Import RAG components
 from aimakerspace.text_utils import CharacterTextSplitter
 from aimakerspace.vectordatabase import VectorDatabase
-from aimakerspace.openai_utils.embedding import EmbeddingModel
+from aimakerspace.gemini_utils.embedding import GeminiEmbeddingModel
 
 # Load environment variables from .env file
 load_dotenv()
@@ -160,8 +160,8 @@ class SimpleRAG:
             # Split text into chunks
             chunks = self.text_splitter.split(text)
             
-            # Create vector database with OpenAI embeddings
-            vector_db = VectorDatabase()
+            # Create vector database with Gemini embeddings
+            vector_db = VectorDatabase(embedding_model=GeminiEmbeddingModel())
             
             # Build embeddings and populate vector database
             vector_db = await vector_db.abuild_from_list(chunks)
