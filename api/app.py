@@ -245,11 +245,9 @@ RESPONSE (based on the document context above):"""
         response = model.generate_content(prompt)
         return response.text
 
-# Initialize RAG system - only if imports succeeded
-if RAG_AVAILABLE:
-    rag_system = SimpleRAG()
-else:
-    rag_system = None
+# Skip RAG system initialization for Vercel debugging
+rag_system = None
+RAG_AVAILABLE = False
 
 def extract_text_from_pdf(file_content: bytes) -> str:
     """Extract text content from PDF file"""
