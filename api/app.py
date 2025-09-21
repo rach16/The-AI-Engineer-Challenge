@@ -23,7 +23,7 @@ try:
     from aimakerspace.vectordatabase import VectorDatabase
     from aimakerspace.gemini_utils.embedding import GeminiEmbeddingModel
     RAG_AVAILABLE = True
-    print("✅ RAG components imported successfully")
+    print("✅ RAG components imported successfully - Full functionality enabled!")
 except ImportError as e:
     print(f"❌ RAG imports failed: {e}")
     RAG_AVAILABLE = False
