@@ -30,6 +30,7 @@ const DataPromoAgent = () => {
 
   React.useEffect(() => {
     fetchUsageInfo();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchUsageInfo = async () => {
