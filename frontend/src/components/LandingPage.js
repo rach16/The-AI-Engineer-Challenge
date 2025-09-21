@@ -258,6 +258,91 @@ const LandingPage = ({ onNavigateToTab }) => {
         </div>
       </div>
 
+      {/* Pricing Section */}
+      <div className="pricing-section">
+        <div className="section-header">
+          <h2>Simple, Flexible Pricing</h2>
+          <p>Choose the plan that works best for you</p>
+        </div>
+
+        <div className="pricing-cards">
+          <div className="pricing-card free">
+            <div className="pricing-header">
+              <div className="pricing-icon">
+                <CheckCircle size={24} />
+              </div>
+              <h3>Free Tier</h3>
+              <div className="pricing-price">
+                <span className="price">$0</span>
+                <span className="period">/forever</span>
+              </div>
+            </div>
+            <div className="pricing-features">
+              <div className="pricing-feature">
+                <CheckCircle size={16} />
+                <span>2 uses per day</span>
+              </div>
+              <div className="pricing-feature">
+                <CheckCircle size={16} />
+                <span>All QA Hub tools</span>
+              </div>
+              <div className="pricing-feature">
+                <CheckCircle size={16} />
+                <span>No setup required</span>
+              </div>
+              <div className="pricing-feature">
+                <CheckCircle size={16} />
+                <span>Perfect for trying out</span>
+              </div>
+            </div>
+            <button 
+              className="pricing-cta free-cta"
+              onClick={() => onNavigateToTab('prd-generator')}
+            >
+              Start Free
+            </button>
+          </div>
+
+          <div className="pricing-card unlimited">
+            <div className="pricing-badge">Most Popular</div>
+            <div className="pricing-header">
+              <div className="pricing-icon">
+                <Zap size={24} />
+              </div>
+              <h3>Unlimited</h3>
+              <div className="pricing-price">
+                <span className="price">Your API key</span>
+                <span className="period">+ Google's pricing</span>
+              </div>
+            </div>
+            <div className="pricing-features">
+              <div className="pricing-feature">
+                <CheckCircle size={16} />
+                <span>Unlimited usage</span>
+              </div>
+              <div className="pricing-feature">
+                <CheckCircle size={16} />
+                <span>All QA Hub tools</span>
+              </div>
+              <div className="pricing-feature">
+                <CheckCircle size={16} />
+                <span>Your own API quotas</span>
+              </div>
+              <div className="pricing-feature">
+                <CheckCircle size={16} />
+                <span>~$0.01 per document</span>
+              </div>
+            </div>
+            <button 
+              className="pricing-cta unlimited-cta"
+              onClick={() => onNavigateToTab('prd-generator')}
+            >
+              Get API Key & Start
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Benefits Section */}
       <div className="benefits-section">
         <div className="section-header">
@@ -298,7 +383,7 @@ const LandingPage = ({ onNavigateToTab }) => {
           <div className="cta-features">
             <div className="cta-feature">
               <CheckCircle size={16} />
-              <span>Free to use</span>
+              <span>2 free uses per day</span>
             </div>
             <div className="cta-feature">
               <CheckCircle size={16} />
@@ -306,7 +391,7 @@ const LandingPage = ({ onNavigateToTab }) => {
             </div>
             <div className="cta-feature">
               <CheckCircle size={16} />
-              <span>Instant results</span>
+              <span>Unlimited with your API key</span>
             </div>
           </div>
         </div>

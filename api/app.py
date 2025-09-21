@@ -36,16 +36,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Built-in API key for free tier (set via environment variable)
+# Built-in API key for free tier (limited usage)
 BUILT_IN_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Development mode configuration
 DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "true").lower() == "true"  # Default to true for local testing
 
-# Rate limiting configuration
-FREE_TIER_DAILY_LIMIT = 5  # 5 free uses per day for production
+# Rate limiting configuration - STRICT limits for free tier
+FREE_TIER_DAILY_LIMIT = 2  # Only 2 free uses per day to control costs
 UNLIMITED_DEV_LIMIT = 999999  # Unlimited for development
 usage_tracker = {}  # In production, use Redis or database
+
+# API Key tiers
+class APIKeyTier:
+    FREE = "free"           # 2 uses/day with built-in key
+    USER_PROVIDED = "user"  # Unlimited with user's own key
 
 # Data models
 class TestCase(BaseModel):
@@ -89,11 +94,22 @@ def get_client_identifier(request: Request) -> str:
     user_agent = request.headers.get("user-agent", "")
     return f"{client_ip}_{hash(user_agent)}"
 
-def check_free_tier_usage(client_id: str) -> Dict[str, Any]:
-    """Check and update free tier usage"""
+def check_usage_limits(client_id: str, has_user_api_key: bool = False) -> Dict[str, Any]:
+    """Check usage limits based on API key tier"""
     today = datetime.now().date().isoformat()
     
-    # In development mode, provide unlimited usage
+    # User-provided API key = unlimited usage
+    if has_user_api_key:
+        return {
+            "tier": APIKeyTier.USER_PROVIDED,
+            "daily_limit": "unlimited",
+            "used_today": 0,
+            "remaining_today": "unlimited", 
+            "can_use": True,
+            "message": "Using your API key - unlimited usage!"
+        }
+    
+    # Development mode with built-in key
     if DEVELOPMENT_MODE:
         if client_id not in usage_tracker:
             usage_tracker[client_id] = {}
@@ -110,7 +126,7 @@ def check_free_tier_usage(client_id: str) -> Dict[str, Any]:
             "development_mode": True
         }
     
-    # Production mode with rate limiting
+    # Free tier with built-in key (STRICT limits)
     if client_id not in usage_tracker:
         usage_tracker[client_id] = {}
     
@@ -121,13 +137,19 @@ def check_free_tier_usage(client_id: str) -> Dict[str, Any]:
     remaining = max(0, FREE_TIER_DAILY_LIMIT - current_usage)
     
     return {
-        "tier": "free",
+        "tier": APIKeyTier.FREE,
         "daily_limit": FREE_TIER_DAILY_LIMIT,
         "used_today": current_usage,
         "remaining_today": remaining,
         "can_use": remaining > 0,
-        "development_mode": False
+        "development_mode": False,
+        "message": f"Free tier: {remaining} uses remaining today"
     }
+
+# Legacy function for backward compatibility
+def check_free_tier_usage(client_id: str) -> Dict[str, Any]:
+    """Legacy function - use check_usage_limits instead"""
+    return check_usage_limits(client_id, has_user_api_key=False)
 
 def increment_free_tier_usage(client_id: str):
     """Increment free tier usage counter"""
@@ -327,9 +349,10 @@ def generate_test_cases(prd_content: str, gemini_model) -> List[TestCase]:
 @app.post("/api/upload-prd", response_model=ProcessResponse)
 async def upload_prd(
     request: Request,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    user_api_key: Optional[str] = Form(None)
 ):
-    """Upload PRD file and generate test cases using built-in API key"""
+    """Upload PRD file and generate test cases - supports both free tier and user API keys"""
     
     # Validate file type
     allowed_types = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
@@ -340,27 +363,35 @@ async def upload_prd(
             detail="Unsupported file type. Please upload PDF, JPEG, JPG, or PNG files."
         )
     
-    # Check if built-in API key is available
-    if not BUILT_IN_GEMINI_KEY:
+    # Determine which API key to use
+    has_user_key = bool(user_api_key and user_api_key.strip())
+    api_key_to_use = user_api_key.strip() if has_user_key else BUILT_IN_GEMINI_KEY
+    
+    # Check if any API key is available
+    if not api_key_to_use:
         raise HTTPException(
-            status_code=503, 
-            detail="Service temporarily unavailable. Please try again later."
+            status_code=400,
+            detail="No API key available. Please provide your Gemini API key or try again later."
         )
     
-    # Check rate limiting
+    # Check usage limits based on tier
     client_id = get_client_identifier(request)
-    usage_info = check_free_tier_usage(client_id)
+    usage_info = check_usage_limits(client_id, has_user_api_key=has_user_key)
     
     if not usage_info["can_use"]:
-        limit_text = "unlimited" if DEVELOPMENT_MODE else str(FREE_TIER_DAILY_LIMIT)
-        raise HTTPException(
-            status_code=429,
-            detail=f"Daily limit ({limit_text} uses) reached. Please try again tomorrow."
-        )
+        if has_user_key:
+            # This shouldn't happen with user keys, but just in case
+            raise HTTPException(status_code=500, detail="Error with provided API key")
+        else:
+            # Free tier limit reached
+            raise HTTPException(
+                status_code=429,
+                detail=f"Free tier limit reached ({FREE_TIER_DAILY_LIMIT} uses/day). Provide your own Gemini API key for unlimited usage!"
+            )
 
     try:
-        # Configure Gemini with built-in API key
-        genai.configure(api_key=BUILT_IN_GEMINI_KEY)
+        # Configure Gemini with appropriate API key
+        genai.configure(api_key=api_key_to_use)
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Read file content
@@ -378,15 +409,20 @@ async def upload_prd(
         # Generate test cases
         test_cases = generate_test_cases(prd_text, model)
         
-        # Update usage tracking
-        increment_free_tier_usage(client_id)
+        # Update usage tracking (only for free tier)
+        if not has_user_key:
+            increment_free_tier_usage(client_id)
         
         # Get updated usage info
-        updated_usage_info = check_free_tier_usage(client_id)
-        if DEVELOPMENT_MODE:
-            updated_usage_info["message"] = f"✅ Success! Development mode - unlimited usage (call #{updated_usage_info['used_today']})"
+        updated_usage_info = check_usage_limits(client_id, has_user_api_key=has_user_key)
+        
+        # Set success message based on tier
+        if has_user_key:
+            updated_usage_info["message"] = f"✅ Success! Using your API key - unlimited usage"
+        elif DEVELOPMENT_MODE:
+            updated_usage_info["message"] = f"✅ Success! Development mode (call #{updated_usage_info['used_today']})"
         else:
-            updated_usage_info["message"] = f"✅ Success! {updated_usage_info['remaining_today']} uses remaining today"
+            updated_usage_info["message"] = f"✅ Success! {updated_usage_info['remaining_today']} free uses remaining today"
         
         return ProcessResponse(
             success=True,
@@ -707,9 +743,10 @@ Provide helpful suggestions for making these test cases clearer, more comprehens
 @app.post("/api/upload-document", response_model=RAGUploadResponse)
 async def upload_document_for_rag(
     request: Request,
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    user_api_key: Optional[str] = Form(None)
 ):
-    """Upload and process a document for RAG"""
+    """Upload and process a document for RAG - supports both free tier and user API keys"""
     
     # Validate file type
     if file.content_type != 'application/pdf':
@@ -718,16 +755,29 @@ async def upload_document_for_rag(
             detail="Only PDF files are supported for RAG functionality."
         )
     
-    # Check rate limiting
+    # Determine API key tier
+    has_user_key = bool(user_api_key and user_api_key.strip())
+    api_key_to_use = user_api_key.strip() if has_user_key else BUILT_IN_GEMINI_KEY
+    
+    # Check if any API key is available
+    if not api_key_to_use:
+        raise HTTPException(
+            status_code=400,
+            detail="No API key available. Please provide your Gemini API key or try again later."
+        )
+    
+    # Check usage limits based on tier
     client_id = get_client_identifier(request)
-    usage_info = check_free_tier_usage(client_id)
+    usage_info = check_usage_limits(client_id, has_user_api_key=has_user_key)
     
     if not usage_info["can_use"]:
-        limit_text = "unlimited" if DEVELOPMENT_MODE else str(FREE_TIER_DAILY_LIMIT)
-        raise HTTPException(
-            status_code=429,
-            detail=f"Daily limit ({limit_text} uses) reached. Please try again tomorrow."
-        )
+        if has_user_key:
+            raise HTTPException(status_code=500, detail="Error with provided API key")
+        else:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Free tier limit reached ({FREE_TIER_DAILY_LIMIT} uses/day). Provide your own Gemini API key for unlimited usage!"
+            )
     
     try:
         # Read and extract text from PDF
@@ -743,14 +793,19 @@ async def upload_document_for_rag(
         # Process document with RAG
         chunks_count = await rag_system.process_document(text_content, document_id)
         
-        # Update usage tracking
-        increment_free_tier_usage(client_id)
-        updated_usage_info = check_free_tier_usage(client_id)
+        # Update usage tracking (only for free tier)
+        if not has_user_key:
+            increment_free_tier_usage(client_id)
         
-        if DEVELOPMENT_MODE:
-            updated_usage_info["message"] = f"✅ Document processed! Development mode - unlimited usage"
+        updated_usage_info = check_usage_limits(client_id, has_user_api_key=has_user_key)
+        
+        # Set success message based on tier
+        if has_user_key:
+            updated_usage_info["message"] = f"✅ Document processed! Using your API key - unlimited usage"
+        elif DEVELOPMENT_MODE:
+            updated_usage_info["message"] = f"✅ Document processed! Development mode"
         else:
-            updated_usage_info["message"] = f"✅ Document processed! {updated_usage_info['remaining_today']} uses remaining today"
+            updated_usage_info["message"] = f"✅ Document processed! {updated_usage_info['remaining_today']} free uses remaining today"
         
         return RAGUploadResponse(
             success=True,

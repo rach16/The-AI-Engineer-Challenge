@@ -121,6 +121,63 @@
   text-decoration: underline;
 }
 
+/* Pricing Tiers */
+.pricing-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.tier {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--color-border-primary);
+  border-radius: 8px;
+  background: var(--color-bg-secondary);
+}
+
+.tier-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tier-info strong {
+  font-size: 0.875rem;
+  color: var(--color-text-primary);
+}
+
+.tier-info span {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.tier-info a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.tier-info a:hover {
+  text-decoration: underline;
+}
+
+.free-tier {
+  border-color: var(--color-success);
+}
+
+.free-tier svg {
+  color: var(--color-success);
+}
+
+.unlimited-tier svg {
+  color: var(--color-primary);
+}
+
 .api-key-help strong {
   color: #10b981;
 } 

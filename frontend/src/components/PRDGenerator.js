@@ -6,6 +6,7 @@ import TestCaseTable from './TestCaseTable';
 import UsageInfo from './UsageInfo';
 import PromptingTool from './PromptingTool';
 import { FileText, MessageSquare, Zap, Bot, User, Send, Loader, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
+import ApiKeyInput from './ApiKeyInput';
 import './PRDGenerator.css';
 
 const PRDGenerator = () => {
@@ -14,6 +15,9 @@ const PRDGenerator = () => {
   const [hasResults, setHasResults] = useState(false);
   const [usageInfo, setUsageInfo] = useState(null);
   const [serviceAvailable, setServiceAvailable] = useState(false);
+  
+  // API Key state for hybrid tier system
+  const [userApiKey, setUserApiKey] = useState('');
   
   // RAG-related state
   const [uploadedDocument, setUploadedDocument] = useState(null);
@@ -60,6 +64,9 @@ const PRDGenerator = () => {
   const uploadToRAG = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (userApiKey.trim()) {
+      formData.append('user_api_key', userApiKey.trim());
+    }
 
     try {
       const response = await axios.post(`${API_BASE}/api/upload-document`, formData, {
@@ -102,6 +109,7 @@ const PRDGenerator = () => {
       const response = await axios.post(`${API_BASE}/api/chat-with-document`, {
         question: currentMessage,
         document_id: uploadedDocument.id,
+        api_key: userApiKey.trim() || undefined,
       });
 
       if (response.data.success) {
@@ -189,6 +197,9 @@ const PRDGenerator = () => {
     setLoading(true);
     const formData = new FormData();
     formData.append('file', file);
+    if (userApiKey.trim()) {
+      formData.append('user_api_key', userApiKey.trim());
+    }
 
     try {
       const response = await axios.post(`${API_BASE}/api/upload-prd`, formData, {
@@ -290,6 +301,12 @@ const PRDGenerator = () => {
             <UsageInfo 
               usageInfo={usageInfo} 
               serviceAvailable={serviceAvailable}
+            />
+            <ApiKeyInput
+              apiKey={userApiKey}
+              setApiKey={setUserApiKey}
+              freeTierAvailable={serviceAvailable}
+              usageInfo={usageInfo}
             />
             <FileUpload 
               onFileUpload={handleFileUpload} 

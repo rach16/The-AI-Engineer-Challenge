@@ -21,7 +21,7 @@ const ApiKeyInput = ({ apiKey, setApiKey, freeTierAvailable, usageInfo }) => {
         {freeTierAvailable && (
           <div className="free-tier-notice">
             <Zap size={16} />
-            <span>Free tier available! {usageInfo?.remaining_today || 5} uses remaining today</span>
+            <span>Free tier available! {usageInfo?.remaining_today || 2} uses remaining today</span>
           </div>
         )}
       </div>
@@ -46,17 +46,30 @@ const ApiKeyInput = ({ apiKey, setApiKey, freeTierAvailable, usageInfo }) => {
       
       <div className="api-key-help">
         {freeTierAvailable ? (
-          <p>
-            🎉 <strong>Try for free!</strong> Get {usageInfo?.daily_limit || 5} free uses per day, or{' '}
-            <a 
-              href="https://makersuite.google.com/app/apikey" 
-              target="_blank" 
-              rel="noopener noreferrer"
-            >
-              get your own API key
-            </a>{' '}
-            for unlimited usage.
-          </p>
+          <div className="pricing-tiers">
+            <div className="tier free-tier">
+              <Gift size={16} />
+              <div className="tier-info">
+                <strong>Free Tier</strong>
+                <span>{usageInfo?.daily_limit || 2} uses per day • No setup required</span>
+              </div>
+            </div>
+            <div className="tier unlimited-tier">
+              <Zap size={16} />
+              <div className="tier-info">
+                <strong>Unlimited Tier</strong>
+                <span>Your API key • No limits • 
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                >
+                  Get Free Key
+                </a>
+                </span>
+              </div>
+            </div>
+          </div>
         ) : (
           <p>
             Get your Gemini API key from{' '}

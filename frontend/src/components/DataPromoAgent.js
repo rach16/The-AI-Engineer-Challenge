@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Database, Upload, MessageSquare, CheckCircle, AlertTriangle, FileText, Send, Bot, User, Loader } from 'lucide-react';
+import ApiKeyInput from './ApiKeyInput';
 import './DataPromoAgent.css';
 
 const DataPromoAgent = () => {
@@ -9,6 +10,8 @@ const DataPromoAgent = () => {
   const [chatMessages, setChatMessages] = useState([]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [userApiKey, setUserApiKey] = useState('');
+  const [usageInfo, setUsageInfo] = useState(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -25,6 +28,20 @@ const DataPromoAgent = () => {
     scrollToBottom();
   }, [chatMessages]);
 
+  React.useEffect(() => {
+    fetchUsageInfo();
+  }, []);
+
+  const fetchUsageInfo = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/usage-info`);
+      const data = await response.json();
+      setUsageInfo(data);
+    } catch (error) {
+      console.error('Error fetching usage info:', error);
+    }
+  };
+
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -39,6 +56,9 @@ const DataPromoAgent = () => {
 
     const formData = new FormData();
     formData.append('file', file);
+    if (userApiKey.trim()) {
+      formData.append('user_api_key', userApiKey.trim());
+    }
 
     try {
       const response = await fetch(`${API_BASE}/api/upload-document`, {
@@ -60,6 +80,13 @@ const DataPromoAgent = () => {
           type: 'system',
           content: `🎉 Document "${file.name}" uploaded successfully! Split into ${result.chunks_count} searchable chunks. Ask me anything about it!`
         }]);
+        
+        // Update usage info after successful upload
+        if (result.usage_info) {
+          setUsageInfo(result.usage_info);
+        } else {
+          fetchUsageInfo();
+        }
       } else {
         setUploadStatus({ success: false, message: result.message || 'Upload failed' });
       }
@@ -87,6 +114,7 @@ const DataPromoAgent = () => {
         body: JSON.stringify({
           question: currentMessage,
           document_id: uploadedDocument.id,
+          api_key: userApiKey.trim() || undefined,
         }),
       });
 
@@ -179,40 +207,49 @@ const DataPromoAgent = () => {
             </p>
             
             {!uploadedDocument ? (
-              <div className="upload-area">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileUpload}
-                  accept=".pdf"
-                  className="file-input"
-                  id="pdf-upload"
+              <>
+                <ApiKeyInput
+                  apiKey={userApiKey}
+                  setApiKey={setUserApiKey}
+                  freeTierAvailable={usageInfo?.service_available}
+                  usageInfo={usageInfo}
                 />
-                <label htmlFor="pdf-upload" className="upload-label">
-                  <div className="upload-content">
-                    <FileText size={48} className="upload-icon" />
-                    <div className="upload-text">
-                      <h4>Choose PDF Document</h4>
-                      <p>Click here to upload your process documentation</p>
-                      <span className="upload-hint">Perfect for: Process guides, SOPs, deployment docs</span>
+                
+                <div className="upload-area">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept=".pdf"
+                    className="file-input"
+                    id="pdf-upload"
+                  />
+                  <label htmlFor="pdf-upload" className="upload-label">
+                    <div className="upload-content">
+                      <FileText size={48} className="upload-icon" />
+                      <div className="upload-text">
+                        <h4>Choose PDF Document</h4>
+                        <p>Click here to upload your process documentation</p>
+                        <span className="upload-hint">Perfect for: Process guides, SOPs, deployment docs</span>
+                      </div>
                     </div>
-                  </div>
-                </label>
-                
-                {isUploading && (
-                  <div className="upload-progress">
-                    <Loader className="spinner" size={20} />
-                    <span>Processing document and creating searchable index...</span>
-                  </div>
-                )}
-                
-                {uploadStatus && (
-                  <div className={`upload-status ${uploadStatus.success ? 'success' : 'error'}`}>
-                    {uploadStatus.success ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
-                    <span>{uploadStatus.message}</span>
-                  </div>
-                )}
-              </div>
+                  </label>
+                  
+                  {isUploading && (
+                    <div className="upload-progress">
+                      <Loader className="spinner" size={20} />
+                      <span>Processing document and creating searchable index...</span>
+                    </div>
+                  )}
+                  
+                  {uploadStatus && (
+                    <div className={`upload-status ${uploadStatus.success ? 'success' : 'error'}`}>
+                      {uploadStatus.success ? <CheckCircle size={16} /> : <AlertTriangle size={16} />}
+                      <span>{uploadStatus.message}</span>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               <div className="uploaded-document">
                 <div className="document-info">
@@ -358,6 +395,16 @@ const DataPromoAgent = () => {
                       <li>"Show me the ArgoCD sync commands"</li>
                       <li>"What should I do if something goes wrong?"</li>
                     </ul>
+                    
+                    {usageInfo && (
+                      <div className="tier-info">
+                        {userApiKey.trim() ? (
+                          <p>🚀 <strong>Unlimited Tier:</strong> Using your API key - no limits!</p>
+                        ) : (
+                          <p>🎁 <strong>Free Tier:</strong> {usageInfo.remaining_today || 2} uses remaining today</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 
