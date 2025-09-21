@@ -1,4 +1,5 @@
 import os
+import sys
 import io
 import csv
 import json
@@ -16,10 +17,15 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Import RAG components
-from aimakerspace.text_utils import CharacterTextSplitter
-from aimakerspace.vectordatabase import VectorDatabase
-from aimakerspace.gemini_utils.embedding import GeminiEmbeddingModel
+# Import RAG components - with error handling for Vercel
+try:
+    from aimakerspace.text_utils import CharacterTextSplitter
+    from aimakerspace.vectordatabase import VectorDatabase
+    from aimakerspace.gemini_utils.embedding import GeminiEmbeddingModel
+    RAG_AVAILABLE = True
+except ImportError as e:
+    print(f"RAG imports failed: {e}")
+    RAG_AVAILABLE = False
 
 # Load environment variables from .env file
 load_dotenv()
@@ -239,8 +245,11 @@ RESPONSE (based on the document context above):"""
         response = model.generate_content(prompt)
         return response.text
 
-# Initialize RAG system
-rag_system = SimpleRAG()
+# Initialize RAG system - only if imports succeeded
+if RAG_AVAILABLE:
+    rag_system = SimpleRAG()
+else:
+    rag_system = None
 
 def extract_text_from_pdf(file_content: bytes) -> str:
     """Extract text content from PDF file"""
@@ -490,14 +499,23 @@ async def download_csv(test_cases: List[TestCase]):
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
-    return {
-        "status": "ok", 
-        "service": "PRD to Test Case Generator",
-        "free_tier_available": bool(BUILT_IN_GEMINI_KEY),
-        "daily_free_limit": "unlimited" if DEVELOPMENT_MODE else FREE_TIER_DAILY_LIMIT,
-        "development_mode": DEVELOPMENT_MODE,
-        "tier": "development" if DEVELOPMENT_MODE else "production"
-    }
+    try:
+        return {
+            "status": "ok", 
+            "service": "PRD to Test Case Generator",
+            "free_tier_available": bool(BUILT_IN_GEMINI_KEY),
+            "daily_free_limit": "unlimited" if DEVELOPMENT_MODE else FREE_TIER_DAILY_LIMIT,
+            "development_mode": DEVELOPMENT_MODE,
+            "tier": "development" if DEVELOPMENT_MODE else "production",
+            "rag_available": RAG_AVAILABLE,
+            "environment": {
+                "has_api_key": bool(BUILT_IN_GEMINI_KEY),
+                "vercel_env": os.getenv("VERCEL_ENV", "local"),
+                "python_version": sys.version
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # Additional data models for prompting tool
 class ChatMessage(BaseModel):

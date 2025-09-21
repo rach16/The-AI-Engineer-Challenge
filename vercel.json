@@ -8,10 +8,13 @@
           "distDir": "build"
         }
       },
-      { 
-        "src": "api/app.py",
-        "use": "@vercel/python"
+    { 
+      "src": "api/app.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
       }
+    }
     ],
     "routes": [
       { 
