@@ -316,18 +316,21 @@ const PRDGenerator = () => {
               <div className="option-cards">
                 <button 
                   className="option-card chat-option"
-                  onClick={() => setShowRAGChat(true)}
+                  onClick={() => {
+                    setShowRAGChat(true);
+                    toast('💬 Now chatting with your document - ask questions about requirements!', { duration: 3000 });
+                  }}
                 >
                   <div className="option-icon">
                     <MessageSquare size={32} />
                   </div>
                   <div className="option-content">
-                    <h4>Chat with PRD</h4>
-                    <p>Ask questions about requirements, features, and edge cases before generating test cases</p>
+                    <h4>💬 Chat with PRD (Recommended)</h4>
+                    <p>Ask questions about requirements, features, and edge cases - does NOT generate test cases</p>
                     <div className="option-benefits">
-                      <span>✨ Better understanding</span>
-                      <span>🎯 Targeted test cases</span>
-                      <span>🔍 Identify edge cases</span>
+                      <span>❓ Ask questions only</span>
+                      <span>💡 Understand requirements</span>
+                      <span>🔍 Analyze document content</span>
                     </div>
                   </div>
                   <ArrowRight size={20} className="option-arrow" />
@@ -336,7 +339,10 @@ const PRDGenerator = () => {
                 <button 
                   className="option-card generate-option"
                   onClick={() => {
-                    if (uploadedFile) generateTestCasesFromPRD(uploadedFile);
+                    if (uploadedFile) {
+                      toast('⚡ Generating test cases - this will create a table below!', { duration: 3000 });
+                      generateTestCasesFromPRD(uploadedFile);
+                    }
                   }}
                   disabled={loading}
                 >
@@ -344,12 +350,12 @@ const PRDGenerator = () => {
                     <Zap size={32} />
                   </div>
                   <div className="option-content">
-                    <h4>Generate Test Cases</h4>
-                    <p>Skip to directly generating comprehensive test cases from your PRD</p>
+                    <h4>⚡ Generate Test Cases</h4>
+                    <p>Creates a table of test cases below - separate from chat feature</p>
                     <div className="option-benefits">
-                      <span>⚡ Quick results</span>
-                      <span>📋 Comprehensive coverage</span>
-                      <span>📊 Structured format</span>
+                      <span>📋 Creates test table</span>
+                      <span>🎯 Comprehensive coverage</span>
+                      <span>💾 Export to CSV</span>
                     </div>
                   </div>
                   <ArrowRight size={20} className="option-arrow" />
@@ -375,13 +381,17 @@ const PRDGenerator = () => {
                 </div>
                 <button 
                   onClick={() => {
-                    if (uploadedFile) generateTestCasesFromPRD(uploadedFile);
+                    if (uploadedFile) {
+                      toast('⚡ Creating test cases table below - separate from this chat!', { duration: 4000 });
+                      generateTestCasesFromPRD(uploadedFile);
+                    }
                   }}
                   className="generate-tests-btn"
                   disabled={loading}
+                  title="This will create a test cases table below, separate from the chat"
                 >
                   {loading ? <Loader className="spinner" size={16} /> : <Zap size={16} />}
-                  Generate Test Cases
+                  Generate Test Cases Table
                 </button>
               </div>
             </div>
@@ -496,6 +506,10 @@ const PRDGenerator = () => {
           </div>
         ) : (
           <div className="results-section">
+            <div className="section-header">
+              <h2>🧪 Generated Test Cases</h2>
+              <p>📋 These test cases were generated separately from the chat feature above.</p>
+            </div>
             <TestCaseTable 
               testCases={testCases} 
               onDownloadCSV={handleDownloadCSV}

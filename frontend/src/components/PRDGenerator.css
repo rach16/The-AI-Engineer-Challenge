@@ -660,3 +660,28 @@
     transform: translateY(0);
   }
 }
+
+/* Section Header for Visual Separation */
+.section-header {
+  background: var(--color-bg-primary);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  border-radius: 12px;
+  border: 2px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+
+.section-header h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  color: var(--color-text-primary);
+}
+
+.section-header p {
+  font-size: 1rem;
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
