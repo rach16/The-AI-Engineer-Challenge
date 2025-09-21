@@ -8,14 +8,22 @@ app = FastAPI()
 @app.get("/api/debug")
 async def debug_test():
     return {
-        "status": "🚨 DEBUG TEST - If you see this, Vercel is using the updated code!",
+        "status": "🚨 SUCCESS! Vercel IS deploying our changes!",
         "timestamp": "2024-12-19 TEST",
-        "message": "This endpoint was added to test if Vercel deploys new changes"
+        "message": "Now let's switch back to the full app.py with RAG functionality"
     }
 
-# Re-export the main app as well
+@app.get("/api/health") 
+async def health():
+    return {"status": "Debug version working"}
+
+# Import and mount the main app
 try:
     from app import app as main_app
-    app.mount("/main", main_app)
-except:
-    pass
+    # Mount main app endpoints
+    for route in main_app.routes:
+        app.routes.append(route)
+except Exception as e:
+    @app.get("/api/import-error")
+    async def import_error():
+        return {"error": f"Could not import main app: {str(e)}", "status": "debug_mode"}
