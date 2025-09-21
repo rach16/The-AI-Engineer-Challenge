@@ -17,14 +17,15 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Import RAG components - with error handling for Vercel
+# Import RAG components
 try:
     from aimakerspace.text_utils import CharacterTextSplitter
     from aimakerspace.vectordatabase import VectorDatabase
     from aimakerspace.gemini_utils.embedding import GeminiEmbeddingModel
     RAG_AVAILABLE = True
+    print("✅ RAG components imported successfully")
 except ImportError as e:
-    print(f"RAG imports failed: {e}")
+    print(f"❌ RAG imports failed: {e}")
     RAG_AVAILABLE = False
 
 # Load environment variables from .env file
@@ -181,6 +182,8 @@ class SimpleRAG:
     """Simple RAG system using the aimakerspace library"""
     
     def __init__(self):
+        if not RAG_AVAILABLE:
+            raise Exception("RAG components not available")
         # Use smaller chunks for better retrieval precision
         self.text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     
@@ -245,9 +248,14 @@ RESPONSE (based on the document context above):"""
         response = model.generate_content(prompt)
         return response.text
 
-# Skip RAG system initialization for Vercel debugging
-rag_system = None
-RAG_AVAILABLE = False
+# Initialize RAG system if available
+try:
+    rag_system = SimpleRAG()
+    print("RAG system initialized successfully")
+except Exception as e:
+    rag_system = None
+    print(f"RAG system failed to initialize: {e}")
+    RAG_AVAILABLE = False
 
 def extract_text_from_pdf(file_content: bytes) -> str:
     """Extract text content from PDF file"""
@@ -766,6 +774,13 @@ async def upload_document_for_rag(
 ):
     """Upload and process a document for RAG - supports both free tier and user API keys"""
     
+    # Check if RAG system is available
+    if not RAG_AVAILABLE or rag_system is None:
+        raise HTTPException(
+            status_code=503,
+            detail="RAG functionality is temporarily unavailable due to dependency issues. Please try the PRD generation feature instead."
+        )
+    
     # Validate file type
     if file.content_type != 'application/pdf':
         raise HTTPException(
@@ -844,6 +859,16 @@ async def chat_with_document(
     http_request: Request
 ):
     """Chat with an uploaded document using RAG"""
+    
+    # Check if RAG system is available
+    if not RAG_AVAILABLE or rag_system is None:
+        return RAGChatResponse(
+            success=False,
+            message="RAG functionality is temporarily unavailable due to dependency issues.",
+            answer="RAG system is not available. Please use the PRD generation feature for now.",
+            sources=[],
+            usage_info={}
+        )
     
     # Check rate limiting
     client_id = get_client_identifier(http_request)
@@ -924,12 +949,24 @@ async def chat_with_document(
 @app.get("/api/list-documents")
 async def list_documents():
     """List all uploaded documents"""
+    if not RAG_AVAILABLE or rag_system is None:
+        return {
+            "success": False,
+            "message": "RAG functionality is temporarily unavailable",
+            "documents": [],
+            "total_documents": 0
+        }
+    
     documents = []
     for doc_id in rag_documents.keys():
-        documents.append({
-            "document_id": doc_id,
-            "chunks_count": len(rag_documents[doc_id].vectors)
-        })
+        try:
+            documents.append({
+                "document_id": doc_id,
+                "chunks_count": len(rag_documents[doc_id].vectors) if hasattr(rag_documents[doc_id], 'vectors') else 0
+            })
+        except:
+            # Skip documents that might have issues
+            continue
     
     return {
         "success": True,
@@ -941,8 +978,3 @@ async def list_documents():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-# Vercel serverless handler
-def handler(request, response):
-    """Vercel serverless function handler"""
-    return app
