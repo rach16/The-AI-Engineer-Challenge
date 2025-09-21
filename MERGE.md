@@ -1,115 +1,116 @@
-# 🚀 Landing Page Feature - Ready to Merge
+# Merge Instructions - RAG API Key Fix
 
-This branch adds a comprehensive landing page for the QA Hub that showcases all features and serves as an informative entry point for users.
+## Summary of Changes
 
-## 📋 Changes Made
+This branch (`fix-rag-api-key-issue`) fixes a critical issue where RAG document uploads were failing even when users provided their own valid Gemini API keys. The problem was that the RAG system's embedding model was hardcoded to only use the environment variable `GEMINI_API_KEY` and couldn't accept user-provided API keys dynamically.
 
-### ✨ New Components
-- **`LandingPage.js`** - Main landing page component with hero section, features overview, workflow explanation, and call-to-action
-- **`LandingPage.css`** - Comprehensive styling with responsive design, animations, and theme integration
+### Changes Made
 
-### 🔧 Updates
-- **`TabNavigation.js`** - Added "Home" tab as the first navigation option
-- **`App.js`** - Updated routing to include landing page and set it as default tab
+1. **Modified `api/aimakerspace/gemini_utils/embedding.py`**:
+   - Updated `GeminiEmbeddingModel.__init__()` to accept an optional `api_key` parameter
+   - Falls back to environment variable if no API key is provided (backward compatibility)
+   - Improved error message to be more descriptive
 
-### 🎨 Features Added
-- **Hero Section** - Eye-catching introduction with floating cards animation
-- **Feature Cards** - Detailed overview of each QA Hub tool (PRD Generator, Data Promo Agent, Release Agent)
-- **Workflow Steps** - Visual explanation of how QA Hub works
-- **Benefits Section** - Highlights key advantages for QA professionals
-- **Call-to-Action** - Clear paths to start using the tools
-- **Responsive Design** - Works perfectly on desktop, tablet, and mobile
-- **Theme Integration** - Fully compatible with existing light/dark themes
+2. **Updated `api/app.py`**:
+   - Modified `SimpleRAG.process_document()` to accept an optional `api_key` parameter
+   - Updated the `upload_document_for_rag` endpoint to pass user-provided API keys to the RAG system
+   - Ensures user API keys are properly utilized throughout the RAG pipeline
 
-## 🔄 How to Merge
+### Testing Completed
 
-### Option 1: GitHub Pull Request (Recommended)
+- ✅ Verified GeminiEmbeddingModel accepts both default and explicit API keys
+- ✅ Confirmed embedding generation works with user-provided keys
+- ✅ Tested complete upload flow resolves previous failures
+- ✅ Backend and frontend servers start successfully
 
-1. **Push the branch to GitHub:**
+## How to Merge
+
+### Option 1: GitHub PR Route
+
+1. Push the branch to GitHub:
    ```bash
-   git push origin feature/simple-rag-system
+   git push origin fix-rag-api-key-issue
    ```
 
-2. **Create Pull Request:**
-   - Go to GitHub repository
+2. Create a Pull Request:
+   - Go to your GitHub repository
    - Click "Compare & pull request"
-   - Title: "Add comprehensive landing page for QA Hub"
-   - Description: Copy the changes summary from above
-   - Assign reviewers if needed
-   - Click "Create pull request"
+   - Title: "Fix RAG system to use user-provided API keys"
+   - Description: Include the summary above
+   - Request review if needed
+   - Merge when approved
 
-3. **Review and Merge:**
-   - Review the changes in the PR interface
-   - Run any CI/CD checks
-   - Click "Merge pull request" when ready
-   - Choose merge strategy (recommend "Create a merge commit")
-
-### Option 2: GitHub CLI
-
-1. **Create Pull Request via CLI:**
+3. Clean up:
    ```bash
-   gh pr create --title "Add comprehensive landing page for QA Hub" \
-     --body "Adds professional landing page showcasing all QA Hub features with responsive design and smooth navigation" \
-     --base main
+   git checkout main
+   git pull origin main
+   git branch -d fix-rag-api-key-issue
    ```
 
-2. **Merge via CLI:**
-   ```bash
-   # Check PR status
-   gh pr status
-   
-   # Merge when ready
-   gh pr merge --merge
-   ```
+### Option 2: GitHub CLI Route
 
-### Option 3: Direct Merge (Use with Caution)
+```bash
+# Push the branch
+git push origin fix-rag-api-key-issue
+
+# Create and merge PR using GitHub CLI
+gh pr create \
+  --title "Fix RAG system to use user-provided API keys" \
+  --body "Fixes issue where RAG uploads failed even with valid user API keys. 
+
+- Modified GeminiEmbeddingModel to accept optional API key parameter
+- Updated SimpleRAG to pass user-provided keys to embedding model  
+- Resolves upload failures for users with their own Gemini API keys"
+
+# Review and merge (replace PR_NUMBER with actual number)
+gh pr merge PR_NUMBER --merge
+
+# Clean up local branch
+git checkout main
+git pull origin main
+git branch -d fix-rag-api-key-issue
+```
+
+### Option 3: Direct Merge (Local Only)
 
 ```bash
 # Switch to main branch
 git checkout main
 
-# Pull latest changes
-git pull origin main
+# Merge the fix branch
+git merge fix-rag-api-key-issue
 
-# Merge the feature branch
-git merge feature/simple-rag-system
-
-# Push to main
+# Push to remote
 git push origin main
 
-# Clean up feature branch (optional)
-git branch -d feature/simple-rag-system
+# Clean up the feature branch
+git branch -d fix-rag-api-key-issue
 ```
 
-## ✅ Post-Merge Checklist
+## Verification After Merge
 
-- [ ] Verify landing page loads correctly at root URL
-- [ ] Test navigation between landing page and all tools
-- [ ] Confirm responsive design works on different screen sizes
-- [ ] Validate theme switching works with landing page
-- [ ] Test all CTA buttons navigate to correct tools
-- [ ] Deploy to production (Vercel will auto-deploy from main)
+After merging, verify the fix works by:
 
-## 🌟 Impact
+1. Starting both servers:
+   ```bash
+   # Backend
+   cd api && source venv/bin/activate && python app.py
 
-This landing page transforms the QA Hub from a collection of tools into a cohesive, professional application that:
-- **Improves User Experience** - Clear overview of all capabilities
-- **Increases Adoption** - Professional first impression encourages exploration
-- **Provides Context** - Users understand the value proposition immediately
-- **Guides Discovery** - Smart navigation helps users find the right tool
+   # Frontend (in another terminal)
+   cd frontend && npm start
+   ```
 
-## 🚨 Notes
+2. Testing upload with a user API key:
+   - Go to http://localhost:3000
+   - Enter your Gemini API key in the API key input
+   - Try uploading a PDF document
+   - Should see success message instead of upload failure
 
-- All existing functionality remains unchanged
-- Landing page is now the default tab when users first visit
-- Existing bookmarks to specific tools will continue to work
-- No breaking changes to existing components
+## Files Modified
 
----
+- `api/aimakerspace/gemini_utils/embedding.py` - Added API key parameter support
+- `api/app.py` - Updated RAG system to use user-provided keys
 
-**Branch:** `feature/simple-rag-system`  
-**Commits:** 1 commit with comprehensive landing page implementation  
-**Files Changed:** 4 files (2 new, 2 updated)  
-**Lines Added:** ~888 lines of new code  
+## Impact
 
-Ready to enhance the QA Hub user experience! 🎉
+This fix enables users with their own Gemini API keys to successfully upload documents for RAG analysis, resolving the "Failed to upload document for RAG analysis" errors that were occurring even with valid API keys.

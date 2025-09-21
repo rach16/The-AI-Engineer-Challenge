@@ -39,8 +39,9 @@ app.add_middleware(
 # Built-in API key for free tier (limited usage)
 BUILT_IN_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 
-# Development mode configuration
-DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "true").lower() == "true"  # Default to true for local testing
+# Development mode configuration - Auto-detect Vercel production
+is_vercel_production = os.getenv("VERCEL_ENV") == "production"
+DEVELOPMENT_MODE = os.getenv("DEVELOPMENT_MODE", "false" if is_vercel_production else "true").lower() == "true"
 
 # Rate limiting configuration - STRICT limits for free tier
 FREE_TIER_DAILY_LIMIT = 2  # Only 2 free uses per day to control costs
