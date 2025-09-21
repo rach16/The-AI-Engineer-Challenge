@@ -1,13 +1,13 @@
 {
-    "version": 2,
-    "builds": [
-      { 
-        "src": "frontend/package.json", 
-        "use": "@vercel/static-build",
-        "config": {
-          "distDir": "build"
-        }
-      },
+  "version": 2,
+  "builds": [
+    { 
+      "src": "frontend/package.json", 
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
+    },
     { 
       "src": "api/app.py",
       "use": "@vercel/python",
@@ -15,15 +15,24 @@
         "maxLambdaSize": "50mb"
       }
     }
-    ],
-    "routes": [
-      { 
-        "src": "/api/(.*)", 
-        "dest": "api/app.py"
-      },
-      { 
-        "src": "/(.*)", 
-        "dest": "frontend/$1"
-      }
-    ]
-  } 
+  ],
+  "routes": [
+    { 
+      "src": "/api/(.*)", 
+      "dest": "api/app.py"
+    },
+    { 
+      "src": "/(.*)", 
+      "dest": "frontend/$1"
+    }
+  ],
+  "env": {
+    "DEVELOPMENT_MODE": "false",
+    "FREE_TIER_DAILY_LIMIT": "3"
+  },
+  "functions": {
+    "api/app.py": {
+      "maxDuration": 30
+    }
+  }
+}
