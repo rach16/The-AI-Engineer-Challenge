@@ -177,14 +177,15 @@ class SimpleRAG:
         # Use smaller chunks for better retrieval precision
         self.text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=100)
     
-    async def process_document(self, text: str, document_id: str) -> int:
+    async def process_document(self, text: str, document_id: str, api_key: str = None) -> int:
         """Process a document and store it in the vector database"""
         try:
             # Split text into chunks
             chunks = self.text_splitter.split(text)
             
-            # Create vector database with Gemini embeddings
-            vector_db = VectorDatabase(embedding_model=GeminiEmbeddingModel())
+            # Create vector database with Gemini embeddings, using provided API key
+            embedding_model = GeminiEmbeddingModel(api_key=api_key) if api_key else GeminiEmbeddingModel()
+            vector_db = VectorDatabase(embedding_model=embedding_model)
             
             # Build embeddings and populate vector database
             vector_db = await vector_db.abuild_from_list(chunks)
@@ -791,7 +792,7 @@ async def upload_document_for_rag(
         document_id = f"doc_{int(datetime.now().timestamp())}_{hash(text_content[:100]) % 10000}"
         
         # Process document with RAG
-        chunks_count = await rag_system.process_document(text_content, document_id)
+        chunks_count = await rag_system.process_document(text_content, document_id, api_key_to_use)
         
         # Update usage tracking (only for free tier)
         if not has_user_key:

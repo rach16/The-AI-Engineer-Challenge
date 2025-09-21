@@ -9,13 +9,14 @@ from dotenv import load_dotenv
 class GeminiEmbeddingModel:
     """Helper for generating embeddings via the Google Gemini API."""
 
-    def __init__(self, embeddings_model_name: str = "models/text-embedding-004"):
+    def __init__(self, embeddings_model_name: str = "models/text-embedding-004", api_key: str = None):
         load_dotenv()
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        # Use provided API key or fall back to environment variable
+        self.gemini_api_key = api_key or os.getenv("GEMINI_API_KEY")
         if self.gemini_api_key is None:
             raise ValueError(
-                "GEMINI_API_KEY environment variable is not set. "
-                "Please configure it with your Gemini API key."
+                "GEMINI_API_KEY environment variable is not set and no API key provided. "
+                "Please configure it with your Gemini API key or provide one directly."
             )
 
         self.embeddings_model_name = embeddings_model_name
