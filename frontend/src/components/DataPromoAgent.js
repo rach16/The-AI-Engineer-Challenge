@@ -136,14 +136,6 @@ const DataPromoAgent = () => {
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'healthy': return <CheckCircle size={16} color="#10b981" />;
-      case 'warning': return <AlertTriangle size={16} color="#f59e0b" />;
-      case 'error': return <AlertTriangle size={16} color="#ef4444" />;
-      default: return <Clock size={16} color="#64748b" />;
-    }
-  };
 
   const getSampleQuestions = () => {
     if (!uploadedDocument) return [];

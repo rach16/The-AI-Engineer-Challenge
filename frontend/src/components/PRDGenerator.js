@@ -33,6 +33,7 @@ const PRDGenerator = () => {
   // Check usage info on component mount
   useEffect(() => {
     fetchUsageInfo();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-scroll to bottom of chat
@@ -52,9 +53,9 @@ const PRDGenerator = () => {
   };
 
   // RAG helper functions
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // const scrollToBottom = () => {
+  //   messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // };
 
   const uploadToRAG = async (file) => {
     const formData = new FormData();
