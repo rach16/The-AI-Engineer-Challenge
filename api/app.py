@@ -941,3 +941,8 @@ async def list_documents():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# Vercel serverless handler
+def handler(request, response):
+    """Vercel serverless function handler"""
+    return app
