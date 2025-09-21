@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Database, Upload, MessageSquare, CheckCircle, Clock, AlertTriangle, FileText, Send, Bot, User, Loader } from 'lucide-react';
+import { Database, Upload, MessageSquare, CheckCircle, AlertTriangle, FileText, Send, Bot, User, Loader } from 'lucide-react';
 import './DataPromoAgent.css';
 
 const DataPromoAgent = () => {
