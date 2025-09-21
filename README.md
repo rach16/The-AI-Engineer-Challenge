@@ -6,7 +6,7 @@
 
 ## 🌐 **Live Demo**
 
-**Try it now:** https://the-ai-engineering-challenge-r620lovcb.vercel.app
+**Try it now:** https://the-ai-engineering-challenge-o2kudf87r.vercel.app
 
 ✨ **No setup required** - just upload your PRD and get instant test cases!
 
@@ -83,7 +83,7 @@
 
 ### 🌐 Using the Live App
 
-1. **Visit**: https://the-ai-engineering-challenge-r620lovcb.vercel.app
+1. **Visit**: https://the-ai-engineering-challenge-o2kudf87r.vercel.app
 2. **Upload PRD**: Drag & drop or click to upload your PRD file (PDF, JPEG, JPG, PNG)
 3. **AI Processing**: Wait for the AI to analyze your document and generate test cases
 4. **Review & Export**: View the generated test cases and download as CSV if needed
