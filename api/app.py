@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 # Removed pandas - using built-in csv module instead
 from PIL import Image
 import PyPDF2
+import pypdf
 import google.generativeai as genai
 from dotenv import load_dotenv
 import asyncio
@@ -257,16 +258,102 @@ except Exception as e:
     print(f"RAG system failed to initialize: {e}")
     RAG_AVAILABLE = False
 
-def extract_text_from_pdf(file_content: bytes) -> str:
-    """Extract text content from PDF file"""
+def extract_text_from_pdf(file_content: bytes, filename: str = "unknown") -> str:
+    """Extract text content from PDF file with fallback options"""
+    
+    # Check file size (limit to 10MB for serverless)
+    max_file_size = 10 * 1024 * 1024  # 10MB
+    if len(file_content) > max_file_size:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"PDF file too large ({len(file_content)/1024/1024:.1f}MB). Maximum size is 10MB for serverless processing."
+        )
+    
+    # Log processing attempt in development mode
+    if DEVELOPMENT_MODE:
+        print(f"[PDF PROCESSING] Processing {filename} ({len(file_content)/1024:.1f}KB)")
+    
+    text = ""
+    errors = []
+    
+    # Method 1: Try PyPDF2 first (more reliable for most PDFs)
     try:
+        if DEVELOPMENT_MODE:
+            print("[PDF PROCESSING] Attempting with PyPDF2...")
+        
         pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text() + "\n"
-        return text
+        
+        # Check if PDF is encrypted
+        if pdf_reader.is_encrypted:
+            raise Exception("PDF is password-protected")
+        
+        for page_num, page in enumerate(pdf_reader.pages):
+            try:
+                page_text = page.extract_text()
+                if page_text.strip():  # Only add if there's actual text
+                    text += page_text + "\n"
+                    if DEVELOPMENT_MODE:
+                        print(f"[PDF PROCESSING] PyPDF2 extracted text from page {page_num + 1}")
+            except Exception as page_error:
+                if DEVELOPMENT_MODE:
+                    print(f"[PDF PROCESSING] PyPDF2 page {page_num + 1} error: {page_error}")
+                continue
+                
+        if text.strip():
+            if DEVELOPMENT_MODE:
+                print(f"[PDF PROCESSING] PyPDF2 success! Extracted {len(text)} characters")
+            return text.strip()
+        else:
+            raise Exception("PyPDF2 extracted no readable text")
+            
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error reading PDF: {str(e)}")
+        errors.append(f"PyPDF2: {str(e)}")
+        if DEVELOPMENT_MODE:
+            print(f"[PDF PROCESSING] PyPDF2 failed: {e}")
+    
+    # Method 2: Try pypdf as fallback
+    try:
+        if DEVELOPMENT_MODE:
+            print("[PDF PROCESSING] Attempting with pypdf...")
+            
+        from pypdf import PdfReader
+        pdf_reader = PdfReader(io.BytesIO(file_content))
+        
+        for page_num, page in enumerate(pdf_reader.pages):
+            try:
+                page_text = page.extract_text()
+                if page_text.strip():
+                    text += page_text + "\n"
+                    if DEVELOPMENT_MODE:
+                        print(f"[PDF PROCESSING] pypdf extracted text from page {page_num + 1}")
+            except Exception as page_error:
+                if DEVELOPMENT_MODE:
+                    print(f"[PDF PROCESSING] pypdf page {page_num + 1} error: {page_error}")
+                continue
+                
+        if text.strip():
+            if DEVELOPMENT_MODE:
+                print(f"[PDF PROCESSING] pypdf success! Extracted {len(text)} characters")
+            return text.strip()
+        else:
+            raise Exception("pypdf extracted no readable text")
+            
+    except Exception as e:
+        errors.append(f"pypdf: {str(e)}")
+        if DEVELOPMENT_MODE:
+            print(f"[PDF PROCESSING] pypdf failed: {e}")
+    
+    # If both methods failed
+    if DEVELOPMENT_MODE:
+        print(f"[PDF PROCESSING] All methods failed for {filename}")
+        print(f"[PDF PROCESSING] Errors: {errors}")
+    
+    # Provide detailed error message
+    error_details = "; ".join(errors)
+    raise HTTPException(
+        status_code=400, 
+        detail=f"Unable to extract text from PDF '{filename}'. This could be due to: 1) Scanned PDF without OCR text, 2) Complex formatting, 3) Corrupted file, or 4) Unsupported PDF format. Errors: {error_details}. Try uploading as an image (JPG/PNG) for better results."
+    )
 
 def extract_text_from_image(file_content: bytes, gemini_model) -> str:
     """Extract text content from image using Gemini Vision"""
@@ -371,6 +458,10 @@ async def upload_prd(
 ):
     """Upload PRD file and generate test cases - supports both free tier and user API keys"""
     
+    # Log upload attempt in development mode
+    if DEVELOPMENT_MODE:
+        print(f"[UPLOAD] Received file: {file.filename}, type: {file.content_type}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
+    
     # Validate file type
     allowed_types = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
     
@@ -379,6 +470,19 @@ async def upload_prd(
             status_code=400, 
             detail="Unsupported file type. Please upload PDF, JPEG, JPG, or PNG files."
         )
+    
+    # Validate filename
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required.")
+    
+    # Basic file size check (before reading content)
+    if hasattr(file, 'size') and file.size:
+        max_size = 15 * 1024 * 1024  # 15MB limit for upload
+        if file.size > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large ({file.size/1024/1024:.1f}MB). Maximum size is 15MB."
+            )
     
     # Determine which API key to use
     has_user_key = bool(user_api_key and user_api_key.strip())
@@ -416,7 +520,7 @@ async def upload_prd(
         
         # Extract text based on file type
         if file.content_type == 'application/pdf':
-            prd_text = extract_text_from_pdf(file_content)
+            prd_text = extract_text_from_pdf(file_content, file.filename)
         else:  # Image files
             prd_text = extract_text_from_image(file_content, model)
         
@@ -504,24 +608,75 @@ async def download_csv(test_cases: List[TestCase]):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with detailed diagnostics"""
     try:
+        # Test PDF processing capability
+        pdf_test = {"status": "unknown", "error": None}
+        try:
+            # Create a minimal test PDF content to verify libraries work
+            test_content = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \ntrailer\n<<\n/Size 4\n/Root 1 0 R\n>>\nstartxref\n109\n%%EOF"
+            
+            # Test both PDF libraries
+            try:
+                PyPDF2.PdfReader(io.BytesIO(test_content))
+                pdf_test["pypdf2"] = "ok"
+            except Exception as e:
+                pdf_test["pypdf2"] = f"error: {str(e)}"
+            
+            try:
+                import pypdf
+                pypdf.PdfReader(io.BytesIO(test_content))
+                pdf_test["pypdf"] = "ok"
+            except Exception as e:
+                pdf_test["pypdf"] = f"error: {str(e)}"
+                
+            pdf_test["status"] = "ok" if (pdf_test.get("pypdf2") == "ok" or pdf_test.get("pypdf") == "ok") else "error"
+            
+        except Exception as e:
+            pdf_test = {"status": "error", "error": str(e)}
+        
+        # Test Pillow for image processing
+        image_test = {"status": "unknown", "error": None}
+        try:
+            from PIL import Image
+            # Create a simple test image
+            img = Image.new('RGB', (1, 1), color='white')
+            image_test["status"] = "ok"
+        except Exception as e:
+            image_test = {"status": "error", "error": str(e)}
+        
         return {
             "status": "ok", 
             "service": "PRD to Test Case Generator",
+            "timestamp": datetime.now().isoformat(),
             "free_tier_available": bool(BUILT_IN_GEMINI_KEY),
             "daily_free_limit": "unlimited" if DEVELOPMENT_MODE else FREE_TIER_DAILY_LIMIT,
             "development_mode": DEVELOPMENT_MODE,
             "tier": "development" if DEVELOPMENT_MODE else "production",
             "rag_available": RAG_AVAILABLE,
+            "diagnostics": {
+                "pdf_processing": pdf_test,
+                "image_processing": image_test,
+                "pdf_libraries": {
+                    "PyPDF2": "available",
+                    "pypdf": "available"
+                }
+            },
             "environment": {
                 "has_api_key": bool(BUILT_IN_GEMINI_KEY),
                 "vercel_env": os.getenv("VERCEL_ENV", "local"),
-                "python_version": sys.version
+                "python_version": sys.version,
+                "platform": os.name,
+                "cwd": os.getcwd()
             }
         }
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {
+            "status": "error", 
+            "message": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "service": "PRD to Test Case Generator"
+        }
 
 # Additional data models for prompting tool
 class ChatMessage(BaseModel):
@@ -781,12 +936,29 @@ async def upload_document_for_rag(
             detail="RAG functionality is temporarily unavailable due to dependency issues. Please try the PRD generation feature instead."
         )
     
+    # Log upload attempt in development mode
+    if DEVELOPMENT_MODE:
+        print(f"[RAG UPLOAD] Received file: {file.filename}, type: {file.content_type}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
+    
     # Validate file type
     if file.content_type != 'application/pdf':
         raise HTTPException(
             status_code=400,
             detail="Only PDF files are supported for RAG functionality."
         )
+    
+    # Validate filename
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename is required.")
+    
+    # Basic file size check (before reading content)
+    if hasattr(file, 'size') and file.size:
+        max_size = 15 * 1024 * 1024  # 15MB limit for upload
+        if file.size > max_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large ({file.size/1024/1024:.1f}MB). Maximum size is 15MB."
+            )
     
     # Determine API key tier
     has_user_key = bool(user_api_key and user_api_key.strip())
@@ -815,7 +987,7 @@ async def upload_document_for_rag(
     try:
         # Read and extract text from PDF
         file_content = await file.read()
-        text_content = extract_text_from_pdf(file_content)
+        text_content = extract_text_from_pdf(file_content, file.filename)
         
         if not text_content.strip():
             raise HTTPException(status_code=400, detail="No text content found in the PDF")

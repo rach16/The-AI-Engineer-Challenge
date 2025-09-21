@@ -9,7 +9,7 @@
       }
     },
     { 
-      "src": "api/debug_test.py",
+      "src": "api/app.py",
       "use": "@vercel/python",
       "config": {
         "maxLambdaSize": "50mb"
@@ -19,7 +19,7 @@
   "routes": [
     { 
       "src": "/api/(.*)", 
-      "dest": "api/debug_test.py"
+      "dest": "api/app.py"
     },
     { 
       "src": "/(.*)", 
@@ -32,7 +32,7 @@
   },
   "functions": {
     "api/app.py": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   }
 }
