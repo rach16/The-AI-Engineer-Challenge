@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { ThemeProvider } from './contexts/ThemeContext';
 import TabNavigation from './components/TabNavigation';
+import LandingPage from './components/LandingPage';
 import PRDGenerator from './components/PRDGenerator';
 import ReleaseAgent from './components/ReleaseAgent';
 import DataPromoAgent from './components/DataPromoAgent';
@@ -9,10 +10,12 @@ import './themes.css';
 import './App.css';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('prd-generator');
+  const [activeTab, setActiveTab] = useState('home');
 
   const renderActiveTab = () => {
     switch (activeTab) {
+      case 'home':
+        return <LandingPage onNavigateToTab={setActiveTab} />;
       case 'prd-generator':
         return <PRDGenerator />;
       case 'release-agent':
@@ -20,7 +23,7 @@ function App() {
       case 'data-promo-agent':
         return <DataPromoAgent />;
       default:
-        return <PRDGenerator />;
+        return <LandingPage onNavigateToTab={setActiveTab} />;
     }
   };
 

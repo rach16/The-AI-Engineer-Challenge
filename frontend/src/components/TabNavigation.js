@@ -6,22 +6,28 @@ import './TabNavigation.css';
 const TabNavigation = ({ activeTab, onTabChange }) => {
   const tabs = [
     {
+      id: 'home',
+      name: 'Home',
+      icon: <Zap size={20} />,
+      description: 'QA Hub overview and getting started'
+    },
+    {
       id: 'prd-generator',
       name: 'PRD to Test Cases',
       icon: <FileText size={20} />,
       description: 'Transform PRDs into comprehensive test cases'
     },
     {
-      id: 'release-agent',
-      name: 'Release Agent',
-      icon: <GitBranch size={20} />,
-      description: 'Automate release planning & deployment'
-    },
-    {
       id: 'data-promo-agent',
       name: 'Data Promo Agent',
       icon: <Database size={20} />,
       description: 'Data promotion and validation automation'
+    },
+    {
+      id: 'release-agent',
+      name: 'Release Agent',
+      icon: <GitBranch size={20} />,
+      description: 'Automate release planning & deployment'
     }
   ];
 
